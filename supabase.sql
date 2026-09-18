@@ -69,13 +69,13 @@ drop policy if exists "admins manage screens" on public.dashboard_screens;
 create policy "admins manage screens" on public.dashboard_screens for all to authenticated using (public.is_admin()) with check (public.is_admin());
 
 insert into public.site_columns (key,label,data_type,position) values
-('serial_no','S.No','number',1),('state','State','text',2),('district','District','text',3),('site_name','Area / Site Name','text',4),('current_status','Current Status','text',5),('physical_progress','Physical Progress (%)','number',6),('remarks','Remarks','text',7),('site_photo','Site Photo (Link)','url',8),('last_updated','Last Updated','date',9)
+('serial_no','S.No','number',1),('project','Project Name','text',2),('state','State','text',3),('district','District','text',4),('site_name','Area / Site Name','text',5),('current_status','Current Status','text',6),('physical_progress','Physical Progress (%)','number',7),('remarks','Remarks','text',8),('site_photo','Site Photo (Link)','url',9),('last_updated','Last Updated','date',10)
 on conflict (key) do update set label=excluded.label,data_type=excluded.data_type,position=excluded.position;
 
 insert into public.sites (values) values
-('{"serial_no":1,"state":"Maharashtra","district":"Pune","site_name":"Ring Road Phase 2","current_status":"In Progress","physical_progress":45,"remarks":"Piling work completed, foundation ongoing","site_photo":"https://example.com/photos/site1.jpg","last_updated":"2026-09-15"}'),
-('{"serial_no":2,"state":"Uttar Pradesh","district":"Lucknow","site_name":"Metro Extension - Sector 5","current_status":"Delayed","physical_progress":20,"remarks":"Delayed due to land acquisition issue","site_photo":"https://example.com/photos/site2.jpg","last_updated":"2026-09-10"}'),
-('{"serial_no":3,"state":"Gujarat","district":"Surat","site_name":"Flyover Junction A","current_status":"Completed","physical_progress":100,"remarks":"Handed over to municipal authority","site_photo":"https://example.com/photos/site3.jpg","last_updated":"2026-09-01"}');
+('{"serial_no":1,"project":"Highway Development Program","state":"Maharashtra","district":"Pune","site_name":"Ring Road Phase 2","current_status":"In Progress","physical_progress":45,"remarks":"Piling work completed, foundation ongoing","site_photo":"https://example.com/photos/site1.jpg","last_updated":"2026-09-15"}'),
+('{"serial_no":2,"project":"Metro Rail Expansion","state":"Uttar Pradesh","district":"Lucknow","site_name":"Metro Extension - Sector 5","current_status":"Delayed","physical_progress":20,"remarks":"Delayed due to land acquisition issue","site_photo":"https://example.com/photos/site2.jpg","last_updated":"2026-09-10"}'),
+('{"serial_no":3,"project":"Urban Infrastructure Upgrade","state":"Gujarat","district":"Surat","site_name":"Flyover Junction A","current_status":"Completed","physical_progress":100,"remarks":"Handed over to municipal authority","site_photo":"https://example.com/photos/site3.jpg","last_updated":"2026-09-01"}');
 
 -- Development credentials requested for v1. Change both immediately after first use.
 -- The ordinary username `User` maps to user@kiipl.local in the login form.

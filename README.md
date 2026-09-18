@@ -1,4 +1,4 @@
-# KIIPL Construction Site Dashboard (Project Atlas)
+# KIIPL Projects
 
 A live dashboard for tracking construction site progress. Admins import site data from CSV / Excel files, upload site photos to Supabase Storage, and manage columns and screens. Viewers and admins can filter, search, and visualise the data as a data table or dynamic charts.
 
@@ -38,7 +38,7 @@ These create:
 - `sites` — the data rows; each row's `values` is a JSONB map of `column_key -> value` and belongs to one `dashboard_screens` row.
 - `dashboard_screens` — the named sheets.
 - Policies: `public_read`, `admin_all`, and bucket policies so only admins can write files/rows.
-- The seeded demo users and seed columns (`S.No`, `State`, `District`, `Area / Site Name`, `Current Status`, `Physical Progress (%)`, `Remarks`, `Site Photo (Link)`, `Last Updated`).
+- The seeded demo users and seed columns (`S.No`, `Project Name`, `State`, `District`, `Area / Site Name`, `Current Status`, `Physical Progress (%)`, `Remarks`, `Site Photo (Link)`, `Last Updated`).
 
 ## Local development
 

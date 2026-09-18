@@ -43,7 +43,7 @@ function parseNum(v: any): number {
 function autoPickX(cols: C[]): string {
   const text = cols.filter((c) => c.data_type === "text");
   if (text.length) {
-    const best = text.find((c) => /name|title|label|site|area|district|state|status/i.test(c.key + c.label));
+    const best = text.find((c) => /project|name|title|label|site|area|district|state|status/i.test(c.key + c.label));
     return best ? best.key : text[0].key;
   }
   return cols[0]?.key || "name";
@@ -544,7 +544,7 @@ export default function Dashboard() {
         <section className="login-card">
           <div className="login-brand">
             <div className="login-logo">K</div>
-            <p className="eyebrow">KIIPL / PROJECT ATLAS</p>
+            <p className="eyebrow">KIIPL PROJECTS</p>
             <h1>Site progress dashboard</h1>
           </div>
           <p className="login-loading">Loading&hellip;</p>
@@ -557,7 +557,7 @@ export default function Dashboard() {
         <section className="login-card">
           <div className="login-brand">
             <div className="login-logo">K</div>
-            <p className="eyebrow">KIIPL / PROJECT ATLAS</p>
+            <p className="eyebrow">KIIPL PROJECTS</p>
             <h1>Site progress dashboard</h1>
           </div>
           <form className="login-form" onSubmit={login}>
@@ -565,7 +565,7 @@ export default function Dashboard() {
               Email or username
               <span className="login-field">
                 <Icon d={IUser} size={16} />
-                <input name="id" placeholder="Admin@kiipl.com or User" autoFocus />
+                <input name="id" placeholder="name@company.com" autoFocus />
               </span>
             </label>
             <label>
@@ -578,11 +578,6 @@ export default function Dashboard() {
             {note && <p className="notice">{note}</p>}
             <button className="login-btn" type="submit">Sign in</button>
           </form>
-          <div className="login-hint">
-            <strong>Demo accounts</strong>
-            <span>Admin &mdash; Admin@kiipl.com / adminkiipl</span>
-            <span>User &mdash; User / kiipl</span>
-          </div>
         </section>
       </main>
     );
@@ -593,7 +588,7 @@ export default function Dashboard() {
       {/* Header */}
       <header>
         <div>
-          <p className="eyebrow">KIIPL / PROJECT ATLAS</p>
+          <p className="eyebrow">KIIPL PROJECTS</p>
           <h1>Site progress</h1>
         </div>
         <div className="header-actions">
