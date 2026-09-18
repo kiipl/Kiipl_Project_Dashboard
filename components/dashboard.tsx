@@ -28,6 +28,8 @@ const IChart = <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x
 const IOut = <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></>;
 const IPhoto = <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></>;
 const ICol = <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /></>;
+const IUser = <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>;
+const ILock = <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>;
 
 /* ─── Helpers ─── */
 function isNumeric(v: any): boolean {
@@ -235,6 +237,22 @@ export default function Dashboard() {
       password: String(f.get("password")),
     });
     z.error ? setNote(z.error.message) : load();
+  };
+
+  const logout = async () => {
+    await db.auth.signOut();
+    setAuthed(false);
+    setAdmin(false);
+    setScreen("");
+    setCols([]);
+    setRows([]);
+    setScreens([]);
+    setSelected(new Set());
+    setXInited(false);
+    setYInited(false);
+    setQ("");
+    setView("table");
+    setNote("");
   };
 
   /* ─── Screen management ─── */
@@ -521,18 +539,50 @@ export default function Dashboard() {
 
   /* ─── Login screen ─── */
   if (loading)
-    return <main className="login-shell"><section className="login-card"><p>Loading...</p></section></main>;
+    return (
+      <main className="login-shell">
+        <section className="login-card">
+          <div className="login-brand">
+            <div className="login-logo">K</div>
+            <p className="eyebrow">KIIPL / PROJECT ATLAS</p>
+            <h1>Site progress dashboard</h1>
+          </div>
+          <p className="login-loading">Loading&hellip;</p>
+        </section>
+      </main>
+    );
   if (!authed)
     return (
       <main className="login-shell">
         <section className="login-card">
-          <h1>KIIPL Sites</h1>
-          <form onSubmit={login}>
-            <input name="id" placeholder="User or admin email" />
-            <input name="password" type="password" placeholder="Password" />
-            <button>Sign in</button>
+          <div className="login-brand">
+            <div className="login-logo">K</div>
+            <p className="eyebrow">KIIPL / PROJECT ATLAS</p>
+            <h1>Site progress dashboard</h1>
+          </div>
+          <form className="login-form" onSubmit={login}>
+            <label>
+              Email or username
+              <span className="login-field">
+                <Icon d={IUser} size={16} />
+                <input name="id" placeholder="Admin@kiipl.com or User" autoFocus />
+              </span>
+            </label>
+            <label>
+              Password
+              <span className="login-field">
+                <Icon d={ILock} size={16} />
+                <input name="password" type="password" placeholder="Password" />
+              </span>
+            </label>
+            {note && <p className="notice">{note}</p>}
+            <button className="login-btn" type="submit">Sign in</button>
           </form>
-          {note && <p className="notice">{note}</p>}
+          <div className="login-hint">
+            <strong>Demo accounts</strong>
+            <span>Admin &mdash; Admin@kiipl.com / adminkiipl</span>
+            <span>User &mdash; User / kiipl</span>
+          </div>
         </section>
       </main>
     );
@@ -548,7 +598,7 @@ export default function Dashboard() {
         </div>
         <div className="header-actions">
           <span className="role">{admin ? "Admin" : "Viewer"}</span>
-          <button className="icon-btn ghost" title="Sign out" onClick={() => { db.auth.signOut(); setScreen(""); setXInited(false); setYInited(false); }}>
+          <button className="icon-btn ghost" title="Sign out" onClick={logout}>
             <Icon d={IOut} />
           </button>
         </div>
