@@ -1,0 +1,11 @@
+serial_no,state,district,site_name,current_status,physical_progress,remarks,site_photo,last_updated
+1,Maharashtra,Pune,Ring Road Phase 2,In Progress,45,Piling completed foundation ongoing,https://placehold.co/800x500/png?text=Ring+Road+Phase+2,2026-09-15
+2,Uttar Pradesh,Lucknow,Metro Extension Sector 5,Delayed,20,Land acquisition pending,https://placehold.co/800x500/png?text=Metro+Extension,2026-09-10
+3,Gujarat,Surat,Flyover Junction A,Completed,100,Handed over to municipal authority,https://placehold.co/800x500/png?text=Flyover+Junction,2026-09-01
+4,Tamil Nadu,Chennai,Coastal Road Corridor,In Progress,60,Embankment works underway,https://placehold.co/800x500/png?text=Coastal+Road,2026-09-18
+5,Karnataka,Bengaluru,Airport Link Expressway,On Hold,35,Revisiting alignment plan,https://placehold.co/800x500/png?text=Airport+Link,2026-09-05
+6,Rajasthan,Jaipur,Peripheral Highway Belt,In Progress,78,Toll plaza construction started,https://placehold.co/800x500/png?text=Jaipur+Highway,2026-09-16
+7,Kerala,Kochi,Bridge Over River Periyar,In Progress,52,Pier work completed,https://placehold.co/800x500/png?text=Periyar+Bridge,2026-09-12
+8,West Bengal,Kolkata,East-West Corridor Depot,Delayed,18,Rain delays at site,https://placehold.co/800x500/png?text=Kolkata+Depot,2026-09-08
+9,Madhya Pradesh,Indore,Smart City Junction Upgrade,Completed,100,Traffic signals operational,https://placehold.co/800x500/png?text=Indore+Junction,2026-08-28
+10,Telangana,Hyderabad,Metro Stage 3 Route,In Progress,40,Tunnel boring in progress,https://placehold.co/800x500/png?text=Hyderabad+Metro,2026-09-17
