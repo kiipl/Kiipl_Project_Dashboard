@@ -2,12 +2,24 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/utils/supabase/client";
+import { compressImage } from "@/utils/compress";
 import * as XLSX from "xlsx";
 
 /* ─── Types ─── */
 type C = { id: string; key: string; label: string; data_type: string; position: number };
 type S = { id: string; screen_id: string; values: Record<string, any> };
 type Screen = { id: string; name: string };
+type MediaJob = {
+  id: string;
+  file: File;
+  status: "queued" | "compressing" | "uploading" | "ready" | "error";
+  url: string;
+  error: string;
+  orig: number;
+  fin: number;
+  ratio: number;
+  compressed: boolean;
+};
 
 const ProductChart = dynamic(() => import("@/components/product-chart"), {
   ssr: false,
@@ -27,6 +39,8 @@ const ITable = <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" 
 const IChart = <><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></>;
 const IOut = <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></>;
 const IPhoto = <><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></>;
+const IPlay = <><polygon points="6 3 20 12 6 21 6 3" /></>;
+const IMedia = <><rect x="2" y="4" width="20" height="16" rx="2" /><path d="M7 4v16M17 4v16M2 9h5M2 15h5M17 9h5M17 15h5" /></>;
 const ICol = <><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="12" y1="3" x2="12" y2="21" /></>;
 const IUser = <><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></>;
 const ILock = <><rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></>;
@@ -109,6 +123,41 @@ async function uploadImageToBucket(db: ReturnType<typeof createClient>, url: str
   }
 }
 
+/* ─── Multi-media cell helpers ─── */
+const splitMedia = (v: any): string[] =>
+  String(v ?? "").split(/\s*[\n\r]+\s*/).map((s) => s.trim()).filter(Boolean);
+
+function isVideoUrl(v: any): boolean {
+  if (typeof v !== "string" || !v) return false;
+  return /\.(mp4|webm|mov|m4v|avi|mkv|ogv|3gp)(\?.*)?$/i.test(v.split(/[?#]/)[0]);
+}
+
+function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
+  return `${(n / (1024 * 1024)).toFixed(2)} MB`;
+}
+
+function MediaCell({ urls, onOpen }: { urls: string[]; onOpen: () => void }) {
+  const first = urls[0];
+  const many = urls.length > 1;
+  const isVid = isVideoUrl(first);
+  return (
+    <span className="photo-cell">
+      <button className="photo-btn" onClick={onOpen} title={many ? `View ${urls.length} media` : "View media"}>
+        {isVid ? <Icon d={IPlay} size={13} /> : <Icon d={IPhoto} size={14} />}
+        {many && <b className="media-count">{urls.length}</b>}
+      </button>
+      {!isVid && urls.length < 4 && (
+        <img className="preview-pop" loading="lazy" referrerPolicy="no-referrer"
+          src={first} alt=""
+          onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
+          onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "visible"; }} />
+      )}
+    </span>
+  );
+}
+
 /* ─── Main Component ─── */
 export default function Dashboard() {
   const db = useMemo(() => createClient(), []);
@@ -150,8 +199,15 @@ export default function Dashboard() {
   const [uploadNewName, setUploadNewName] = useState("");
   const [uploadTarget, setUploadTarget] = useState("");
 
-  /* Photo lightbox */
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  /* Media slideshow (one cell can hold several photos/videos) */
+  const [lightbox, setLightbox] = useState<{ urls: string[]; idx: number } | null>(null);
+
+  /* Bulk media upload: compress images, upload videos as-is, collect links */
+  const [mediaModal, setMediaModal] = useState(false);
+  const [mediaDrag, setMediaDrag] = useState(false);
+  const [mediaDone, setMediaDone] = useState(false);
+  const [mediaQueue, setMediaQueue] = useState<MediaJob[]>([]);
+  const [mediaAttach, setMediaAttach] = useState<{ key: string; label: string; apply: (urls: string[]) => void } | null>(null);
 
   /* Screen manage menu */
   const [screenMenu, setScreenMenu] = useState(false);
@@ -187,6 +243,18 @@ export default function Dashboard() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  /* ─── Media slideshow keyboard navigation ─── */
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+      if (e.key === "ArrowRight") setLightbox((l) => l && { ...l, idx: (l.idx + 1) % l.urls.length });
+      if (e.key === "ArrowLeft") setLightbox((l) => l && { ...l, idx: (l.idx - 1 + l.urls.length) % l.urls.length });
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   /* ─── Auto-pick chart axes ─── */
   useEffect(() => {
@@ -317,26 +385,96 @@ export default function Dashboard() {
   const processUrlValues = async (vals: Record<string, any>) => {
     for (const c of cols) {
       if (c.data_type !== "url") continue;
-      const url = vals[c.key];
-      if (url && typeof url === "string" && isImageUrl(url) && !isBucketUrl(url)) {
-        const bucketUrl = await uploadImageToBucket(db, url);
-        if (bucketUrl) vals[c.key] = bucketUrl;
+      const lines = splitMedia(vals[c.key]);
+      if (lines.length === 0) continue;
+      const out: string[] = [];
+      let changed = false;
+      for (const ln of lines) {
+        if (isImageUrl(ln) && !isBucketUrl(ln)) {
+          const bucketUrl = await uploadImageToBucket(db, ln);
+          if (bucketUrl) { out.push(bucketUrl); changed = true; continue; }
+        }
+        out.push(ln);
       }
+      if (changed) vals[c.key] = out.join("\n");
     }
     return vals;
   };
 
-  /* Upload a local image file into the site-images bucket, return its public URL. */
-  const uploadLocalImage = async (file: File): Promise<string | null> => {
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  /* Upload a local media file (images compressed first) into the bucket, return its public URL. */
+  const uploadMediaBlob = async (blob: Blob, mime: string, ext: string): Promise<string | null> => {
     const filename = `site_${Date.now()}_${Math.random().toString(36).slice(2, 8)}.${ext}`;
-    const { error } = await db.storage.from("site-images").upload(filename, file, {
-      contentType: file.type || "image/jpeg",
-      cacheControl: "3600",
-    });
-    if (error) { setNote("Image upload failed: " + error.message); return null; }
+    const { error } = await db.storage.from("site-images").upload(filename, blob, { contentType: mime });
+    if (error) return null;
     const { data } = db.storage.from("site-images").getPublicUrl(filename);
     return data?.publicUrl || null;
+  };
+
+  const openBulkPicker = (attach: { key: string; label: string; apply: (urls: string[]) => void } | null) => {
+    setMediaAttach(attach);
+    setMediaQueue([]);
+    setMediaDone(false);
+    setMediaDrag(false);
+    setMediaModal(true);
+  };
+
+  const handleMediaFiles = (files: File[]) => {
+    if (files.length === 0) return;
+    const stamp = Date.now();
+    const jobs: MediaJob[] = files.map((f, i) => ({
+      id: `m_${stamp}_${i}_${Math.random().toString(36).slice(2, 7)}`,
+      file: f,
+      status: "queued",
+      url: "",
+      error: "",
+      orig: f.size,
+      fin: 0,
+      ratio: 1,
+      compressed: false,
+    }));
+    setMediaQueue(jobs);
+    setMediaDone(false);
+    runMediaQueue(jobs);
+  };
+
+  const runMediaQueue = async (jobs: MediaJob[]) => {
+    const patch = (id: string, p: Partial<MediaJob>) =>
+      setMediaQueue((prev) => prev.map((j) => (j.id === id ? { ...j, ...p } : j)));
+    for (const job of jobs) {
+      patch(job.id, { status: "compressing" });
+      let payload: Blob = job.file;
+      let mime = job.file.type || "application/octet-stream";
+      let ext = job.file.name.split(".").pop()?.toLowerCase() || "bin";
+      let compressed = false;
+      let ratio = 1;
+      if (job.file.type?.startsWith("image/")) {
+        const r = await compressImage(job.file);
+        if (r.compressed) {
+          payload = r.blob;
+          compressed = true;
+          ratio = r.ratio;
+          mime = "image/webp";
+          ext = "webp";
+        }
+      }
+      patch(job.id, { status: "uploading", compressed, ratio, fin: payload.size });
+      const url = await uploadMediaBlob(payload, mime, ext);
+      if (!url) { patch(job.id, { status: "error", error: "Upload failed" }); continue; }
+      patch(job.id, { status: "ready", url, fin: payload.size });
+      if (mediaAttach) mediaAttach.apply([url]);
+    }
+    setMediaDone(true);
+  };
+
+  const copyMediaLinks = async () => {
+    const urls = mediaQueue.filter((j) => j.status === "ready").map((j) => j.url);
+    if (urls.length === 0) { setNote("No uploaded links yet"); return; }
+    try {
+      await navigator.clipboard.writeText(urls.join("\n"));
+      setNote(`${urls.length} link(s) copied to clipboard`);
+    } catch {
+      setNote("Could not copy automatically — select the links manually");
+    }
   };
 
   const addRow = async () => {
@@ -515,9 +653,23 @@ export default function Dashboard() {
           if (!cd) continue;
           let val = row[h];
           if (cd.data_type === "number" && val !== "" && val != null) val = parseNum(val);
-          if (cd.data_type === "url" && val && typeof val === "string" && isImageUrl(val) && !isBucketUrl(val)) {
-            const bucketUrl = await uploadImageToBucket(db, val);
-            if (bucketUrl) val = bucketUrl;
+          if (cd.data_type === "url" && val && typeof val === "string") {
+            const lines = splitMedia(val);
+            if (lines.length > 0 && !(lines.length === 1 && lines[0] === val)) {
+              const out: string[] = [];
+              for (const ln of lines) {
+                let item = ln;
+                if (isImageUrl(ln) && !isBucketUrl(ln)) {
+                  const bucketUrl = await uploadImageToBucket(db, ln);
+                  if (bucketUrl) item = bucketUrl;
+                }
+                out.push(item);
+              }
+              val = out.join("\n");
+            } else if (isImageUrl(val) && !isBucketUrl(val)) {
+              const bucketUrl = await uploadImageToBucket(db, val);
+              if (bucketUrl) val = bucketUrl;
+            }
           }
           values[key] = val;
         }
@@ -644,6 +796,9 @@ export default function Dashboard() {
             {uploading ? "…" : <Icon d={IUpload} />}
             <input ref={fileRef} type="file" accept=".csv,.xlsx,.xls" onChange={handleFile} disabled={uploading} title="Upload CSV/XLSX" />
           </label>
+          <button className="icon-btn" title="Bulk upload photos / videos" onClick={() => openBulkPicker(null)}>
+            <Icon d={IMedia} />
+          </button>
           <button className="icon-btn" title="Add column" onClick={() => { setShowAddCol(true); setNewColLabel(""); setNewColType("text"); }}>
             <Icon d={ICol} />
           </button>
@@ -691,16 +846,11 @@ export default function Dashboard() {
                     </td>}
                     {cols.map((c) => (
                       <td key={c.id}>
-                        {c.data_type === "url" && r.values[c.key] ? (
-                          <span className="photo-cell">
-                            <button className="photo-btn" onClick={() => setPhotoUrl(r.values[c.key])} title="View photo">
-                              <Icon d={IPhoto} size={14} />
-                            </button>
-                            <img className="preview-pop" loading="lazy" referrerPolicy="no-referrer"
-                              src={r.values[c.key]} alt={c.label}
-                              onError={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "hidden"; }}
-                              onLoad={(e) => { (e.currentTarget as HTMLImageElement).style.visibility = "visible"; }} />
-                          </span>
+                        {c.data_type === "url" && splitMedia(r.values[c.key]).length > 0 ? (
+                          <MediaCell
+                            urls={splitMedia(r.values[c.key])}
+                            onOpen={() => setLightbox({ urls: splitMedia(r.values[c.key]), idx: 0 })}
+                          />
                         ) : (
                           <span className="cell-text">{String(r.values[c.key] ?? "—")}</span>
                         )}
@@ -786,6 +936,71 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ─── Bulk media upload modal ─── */}
+      {mediaModal && (
+        <div className="modal-backdrop" onClick={() => setMediaModal(false)}>
+          <div className="editor-modal media-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>{mediaAttach ? `Add media to "${mediaAttach.label}"` : "Bulk upload photos & videos"}</h2>
+            <p className="modal-sub">
+              Images are compressed losslessly in your browser and kept only when smaller. Videos upload as-is.
+              Existing data is never touched.
+            </p>
+            <label
+              className={`drop-zone${mediaDrag ? " drag" : ""}`}
+              onDragOver={(e) => { e.preventDefault(); setMediaDrag(true); }}
+              onDragLeave={() => setMediaDrag(false)}
+              onDrop={(e) => { e.preventDefault(); setMediaDrag(false); handleMediaFiles(Array.from(e.dataTransfer.files)); }}
+            >
+              <Icon d={IMedia} size={22} />
+              <span>Drop photos / videos here</span>
+              <span className="drop-sub">or click to browse (multiple allowed)</span>
+              <input
+                type="file" accept="image/*,video/*" multiple
+                onChange={(e) => {
+                  const fs = Array.from(e.target.files || []);
+                  if (fs.length) handleMediaFiles(fs);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+
+            {mediaQueue.length > 0 && (
+              <>
+                <div className="job-list">
+                  {mediaQueue.map((j) => (
+                    <div className="job" key={j.id}>
+                      <span className="job-name">{j.file.name}</span>
+                      <span className="job-status">
+                        {j.status === "queued" && "Preparing…"}
+                        {j.status === "compressing" && "Compressing…"}
+                        {j.status === "uploading" && "Uploading…"}
+                        {j.status === "ready" && (j.compressed
+                          ? `Compressed ${fmtBytes(j.orig)} → ${fmtBytes(j.fin)}`
+                          : `Uploaded as-is (${fmtBytes(j.orig)})`)}
+                        {j.status === "error" && (j.error || "Failed")}
+                      </span>
+                      <span className={`job-dot ${j.status === "ready" ? "ready" : ""} ${j.status === "error" ? "err" : ""}`} />
+                    </div>
+                  ))}
+                </div>
+                <p className="modal-sub">
+                  {mediaQueue.filter((j) => j.status === "ready" || j.status === "error").length} of {mediaQueue.length} done
+                </p>
+              </>
+            )}
+
+            <div className="modal-actions">
+              {mediaQueue.some((j) => j.status === "ready") && (
+                <button className="secondary" onClick={copyMediaLinks}>Copy links</button>
+              )}
+              {mediaDone && (
+                <button onClick={() => setMediaModal(false)}>{mediaAttach ? "Done — links added to cell" : "Close"}</button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ─── Add Column modal ─── */}
       {showAddCol && (
         <div className="modal-backdrop" onClick={() => setShowAddCol(false)}>
@@ -819,19 +1034,25 @@ export default function Dashboard() {
               <label className="field" key={c.id}>{c.label}
                 {c.data_type === "url" ? (
                   <span className="url-field">
-                    <input
+                    <textarea
+                      className="url-lines"
+                      rows={3}
                       value={newRowValues[c.key] || ""}
                       onChange={(e) => setNewRowValues({ ...newRowValues, [c.key]: e.target.value })}
-                      placeholder="Paste image URL or upload a file"
+                      placeholder="One media link per line, or upload files below"
                     />
-                    <label className="icon-btn orange" title="Upload image file">
-                      <Icon d={IUpload} size={14} />
-                      <input type="file" accept="image/*" onChange={async (ev) => {
-                        const f = ev.target.files?.[0];
-                        if (f) { const u = await uploadLocalImage(f); if (u) setNewRowValues({ ...newRowValues, [c.key]: u }); }
-                        ev.target.value = "";
-                      }} />
-                    </label>
+                    <button
+                      type="button"
+                      className="icon-btn orange"
+                      title="Upload photos / videos into this cell"
+                      onClick={() => openBulkPicker({
+                        key: c.key,
+                        label: c.label,
+                        apply: (urls) => setNewRowValues((p) => ({ ...p, [c.key]: [p[c.key], ...urls].filter(Boolean).join("\n") })),
+                      })}
+                    >
+                      <Icon d={IMedia} size={14} />
+                    </button>
                   </span>
                 ) : (
                   <input
@@ -859,19 +1080,25 @@ export default function Dashboard() {
               <label className="field" key={c.id}>{c.label}
                 {c.data_type === "url" ? (
                   <span className="url-field">
-                    <input
+                    <textarea
+                      className="url-lines"
+                      rows={3}
                       value={editValues[c.key] ?? ""}
                       onChange={(e) => setEditValues({ ...editValues, [c.key]: e.target.value })}
-                      placeholder="Paste image URL or upload a file"
+                      placeholder="One media link per line, or upload files below"
                     />
-                    <label className="icon-btn orange" title="Upload image file">
-                      <Icon d={IUpload} size={14} />
-                      <input type="file" accept="image/*" onChange={async (ev) => {
-                        const f = ev.target.files?.[0];
-                        if (f) { const u = await uploadLocalImage(f); if (u) setEditValues({ ...editValues, [c.key]: u }); }
-                        ev.target.value = "";
-                      }} />
-                    </label>
+                    <button
+                      type="button"
+                      className="icon-btn orange"
+                      title="Upload photos / videos into this cell"
+                      onClick={() => openBulkPicker({
+                        key: c.key,
+                        label: c.label,
+                        apply: (urls) => setEditValues((p) => ({ ...p, [c.key]: [p[c.key], ...urls].filter(Boolean).join("\n") })),
+                      })}
+                    >
+                      <Icon d={IMedia} size={14} />
+                    </button>
                   </span>
                 ) : (
                   <input
@@ -889,12 +1116,25 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ─── Photo lightbox ─── */}
-      {photoUrl && (
-        <div className="modal-backdrop photo-lightbox" onClick={() => setPhotoUrl(null)}>
+      {/* ─── Media slideshow lightbox ─── */}
+      {lightbox && (
+        <div className="modal-backdrop photo-lightbox" onClick={() => setLightbox(null)}>
           <div className="lightbox-content" onClick={(e) => e.stopPropagation()}>
-            <button className="lightbox-close" onClick={() => setPhotoUrl(null)}>&times;</button>
-            <img src={photoUrl} alt="Site photo" />
+            <button className="lightbox-close" onClick={() => setLightbox(null)}>&times;</button>
+            {lightbox.urls.length > 1 && (
+              <>
+                <div className="lightbox-nav">
+                  <button onClick={() => setLightbox((l) => l && { ...l, idx: (l.idx - 1 + l.urls.length) % l.urls.length })}>&#8249;</button>
+                  <button onClick={() => setLightbox((l) => l && { ...l, idx: (l.idx + 1) % l.urls.length })}>&#8250;</button>
+                </div>
+                <div className="lightbox-counter">{lightbox.idx + 1} / {lightbox.urls.length}</div>
+              </>
+            )}
+            {isVideoUrl(lightbox.urls[lightbox.idx]) ? (
+              <video className="lb-media" src={lightbox.urls[lightbox.idx]} controls autoPlay playsInline />
+            ) : (
+              <img className="lb-media" src={lightbox.urls[lightbox.idx]} alt="Site media" />
+            )}
           </div>
         </div>
       )}
