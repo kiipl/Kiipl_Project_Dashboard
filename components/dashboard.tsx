@@ -938,7 +938,7 @@ export default function Dashboard() {
 
       {/* ─── Bulk media upload modal ─── */}
       {mediaModal && (
-        <div className="modal-backdrop" onClick={() => setMediaModal(false)}>
+        <div className="modal-backdrop media-backdrop" onClick={() => setMediaModal(false)}>
           <div className="editor-modal media-modal" onClick={(e) => e.stopPropagation()}>
             <h2>{mediaAttach ? `Add media to "${mediaAttach.label}"` : "Bulk upload photos & videos"}</h2>
             <p className="modal-sub">
