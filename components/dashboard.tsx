@@ -744,6 +744,7 @@ export default function Dashboard() {
           <h1>Site progress</h1>
         </div>
         <div className="header-actions">
+          {admin && <a className="lead-btn secondary" href="/leads" title="Social lead capture, outreach, calling and qualification">Lead engine</a>}
           <span className="role">{admin ? "Admin" : "Viewer"}</span>
           <button className="icon-btn ghost" title="Sign out" onClick={logout}>
             <Icon d={IOut} />
